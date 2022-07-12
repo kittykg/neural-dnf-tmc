@@ -1,0 +1,5 @@
+base_dnf:
+  num_preds: 500
+  num_conjuncts: 66
+  num_classes: 22
+  weight_init_type: 'normal'
