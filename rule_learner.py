@@ -1,12 +1,10 @@
-from typing import List, OrderedDict
-
 import torch
-from torch import Tensor
+from torch import nn, Tensor
 
 from dnf_layer import DNF
 
 
-class DNFClassifier:
+class DNFClassifier(nn.Module):
     conj_weight_mask: Tensor
     disj_weight_mask: Tensor
     dnf: DNF
@@ -45,4 +43,3 @@ class DNFClassifier:
         out = self.dnf(input)
         # out: N x R
         return out
-    

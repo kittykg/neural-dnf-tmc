@@ -10,9 +10,9 @@ dnf_vanilla:
   optimiser_lr: 0.001
   optimiser_weight_decay: 0.00004
   scheduler_step: 100
-  loss_func: bce
-  batch_size: 4
-  epochs: 100
+  # loss_func: bce
+  batch_size: 128
+  epochs: 50
   initial_delta: 0.1
   delta_decay_delay: 10
   delta_decay_steps: 1
