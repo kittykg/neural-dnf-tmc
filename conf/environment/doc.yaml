@@ -1,0 +1,3 @@
+train_pkl: /homes/kg3217/Desktop/tmc-dnf/data/train.pkl
+val_pkl: /homes/kg3217/Desktop/tmc-dnf/data/val.pkl
+test_pkl: /homes/kg3217/Desktop/tmc-dnf/data/test.pkl

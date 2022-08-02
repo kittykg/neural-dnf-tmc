@@ -9,7 +9,7 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 import wandb
 
-from analysis import MacroMetricMeter, MetricValueMeter
+from analysis import ClassificationMetric, MacroMetricMeter, MetricValueMeter
 from rule_learner import DNFClassifier
 from utils import (
     get_dnf_classifier_x_and_y,
@@ -38,6 +38,7 @@ class DnfClassifierTrainer:
     epochs: int
     reg_fn: str
     reg_lambda: float
+    macro_metric: ClassificationMetric = ClassificationMetric.PRECISION
 
     # Delta decay scheduler
     delta_decay_scheduler: DeltaDelayedExponentialDecayScheduler
@@ -108,6 +109,13 @@ class DnfClassifierTrainer:
             delta_decay_rate=self.model_train_cfg["delta_decay_rate"],
         )
 
+        if "macro_metric" in self.model_train_cfg:
+            macro_metric_str_val = self.model_train_cfg["macro_metric"]
+            assert macro_metric_str_val in [
+                e.value for e in ClassificationMetric
+            ]
+            self.macro_metric = ClassificationMetric(macro_metric_str_val)
+
     def train(self, model: DNFClassifier) -> OrderedDict:
         seed = torch.get_rng_state()[0].item()
         log.info(f"{self.experiment_name} starts, seed: {seed}")
@@ -134,7 +142,7 @@ class DnfClassifierTrainer:
         self, epoch: int, model: DNFClassifier, optimiser: Optimizer
     ) -> None:
         epoch_loss_meter = MetricValueMeter("epoch_loss_meter")
-        epoch_perf_score_meter = MacroMetricMeter()
+        epoch_perf_score_meter = MacroMetricMeter(self.macro_metric)
 
         model.train()
 
@@ -205,7 +213,7 @@ class DnfClassifierTrainer:
 
     def _epoch_val(self, epoch: int, model: DNFClassifier) -> float:
         epoch_val_loss_meter = MetricValueMeter("epoch_val_loss_meter")
-        epoch_val_perf_score_meter = MacroMetricMeter()
+        epoch_val_perf_score_meter = MacroMetricMeter(self.macro_metric)
 
         model.eval()
 

@@ -1,9 +1,9 @@
 defaults:
   - _self_
-  - environment: pc
+  - environment: doc
   - model: config
   - training: base_parameter
 
-# hydra:
-#   run:
-#     dir: /vol/bitbucket/kg3217/cub_project/cub_3_outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+hydra:
+  run:
+    dir: /vol/bitbucket/kg3217/tmc_dnf_out/${now:%Y-%m-%d}/${now:%H-%M-%S}
