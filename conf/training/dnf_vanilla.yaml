@@ -1,7 +1,7 @@
 defaults:
   - base_parameter
 
-use_cuda: true
+use_cuda: false
 experiment_name: dnf_vanilla_bce
 model_name: dnf_vanilla
 
@@ -11,12 +11,12 @@ dnf_vanilla:
   optimiser_weight_decay: 0.00004
   scheduler_step: 100
   # loss_func: bce
-  batch_size: 256
-  epochs: 1000
+  batch_size: 512
+  epochs: 500
   initial_delta: 0.1
-  delta_decay_delay: 50
+  delta_decay_delay: 500
   delta_decay_steps: 25
-  delta_decay_rate: 1.02
+  delta_decay_rate: 1.1
   reg_fn: l1_mod
   reg_lambda: 0.3
-  macro_metric: f1-score # choices: precision, recall, f1-score
+  macro_metric: precision # choices: precision, recall, f1-score

@@ -1,7 +1,10 @@
 import argparse
+from collections import Counter
 import pickle
+import random
 from typing import List, Tuple
 
+import numpy as np
 from sklearn.model_selection import train_test_split
 
 from common import TmcRawSample
@@ -50,6 +53,31 @@ def split_train_val(
     )
 
 
+def random_oversampling(data: List[TmcRawSample], ratio: float = 1.0):
+    # maxcount = np.max(list(powercount.values()))
+    # for p in powerlabels:
+    #     gapnum = maxcount - powercount[p]
+    #     #print(gapnum)
+    #     temp_df = train_df.iloc[np.random.choice(np.where(train_df['powerlabel']==p)[0],size=gapnum)]
+    #     data_df = train_df.append(temp_df,ignore_index=True)
+    cnt = Counter()
+    for d in data:
+        for l in d.labels:
+            cnt[l] += 1
+    max_count = max(cnt.values())
+
+    additional_data = []
+    for k in cnt.keys():
+        gap = int(max_count * ratio - cnt[k])
+        if gap <= 0:
+            # No gap, don't oversample
+            continue
+        population = [d for d in data if k in d.labels]
+        additional_data += random.choices(population, k=gap)
+
+    return data + additional_data
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-train", type=str, help="Train arff path")
@@ -57,6 +85,12 @@ if __name__ == "__main__":
     parser.add_argument("-od", type=str, help="Output directory")
     parser.add_argument(
         "-rs", type=int, default="73", help="Random seed, deafult"
+    )
+    parser.add_argument(
+        "-ros",
+        type=float,
+        default=1.0,
+        help="Target ratio of most frequente label for random oversampling",
     )
 
     args = parser.parse_args()
@@ -66,10 +100,15 @@ if __name__ == "__main__":
     train_set, val_set = split_train_val(all_train, args.rs)
     test_set = parse_samples_file(args.test)
 
+    random.seed(args.rs)
+
     for s, f_n in zip(
-        [train_set, val_set, test_set], ["train.pkl", "val.pkl", "test.pkl"]
+        [train_set, val_set, test_set],
+        ["train_ros.pkl", "val_ros.pkl", "test_ros.pkl"],
     ):
         with open(args.od + f_n, "wb") as f:
-            pickle.dump(s, f)
+            # Random oversampling for training set only
+            data = random_oversampling(s, args.ros) if "train" in f_n else s
+            pickle.dump(data, f)
 
     print("Data processing done")

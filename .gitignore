@@ -131,3 +131,7 @@ dmypy.json
 
 .DS_store
 outputs/
+tmc2007-500/
+.vscode/
+data/
+fastlas/
