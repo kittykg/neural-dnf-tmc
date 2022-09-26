@@ -12,10 +12,12 @@ import wandb
 from analysis import ClassificationMetric, MacroMetricMeter, MetricValueMeter
 from rule_learner import DNFClassifier
 from utils import (
-    get_dnf_classifier_x_and_y,
-    load_tmc_data,
-    DATA_PATH_DICT_KEY,
+    DeltaDelayedArithmeticSequenceScheduler,
+    DeltaDelayedDecayScheduler,
     DeltaDelayedExponentialDecayScheduler,
+    get_dnf_classifier_x_and_y,
+    load_multi_label_data,
+    DATA_PATH_DICT_KEY,
 )
 
 
@@ -41,7 +43,7 @@ class DnfClassifierTrainer:
     macro_metric: ClassificationMetric = ClassificationMetric.PRECISION
 
     # Delta decay scheduler
-    delta_decay_scheduler: DeltaDelayedExponentialDecayScheduler
+    delta_decay_scheduler: DeltaDelayedDecayScheduler
     delta_one_counter: int = -1
 
     # Configs
@@ -69,7 +71,7 @@ class DnfClassifierTrainer:
         for k in DATA_PATH_DICT_KEY:
             data_path_dict[k] = env_cfg[k + "_pkl"]
 
-        self.train_loader, self.val_loader = load_tmc_data(
+        self.train_loader, self.val_loader = load_multi_label_data(
             is_training=True,
             batch_size=batch_size,
             data_path_dict=data_path_dict,

@@ -3,18 +3,18 @@ from typing import Dict, List
 
 from torch.utils.data import Dataset
 
-from common import TmcRawSample
+from common import MultiLabelDatasetSample
 
 
 class TmcDataset(Dataset):
-    dataset: List[TmcRawSample]
+    dataset: List[MultiLabelDatasetSample]
 
-    def __init__(self, dataset: List[TmcRawSample]) -> None:
+    def __init__(self, dataset: List[MultiLabelDatasetSample]) -> None:
         self.dataset = dataset
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx) -> Dict:
-        data = self.dataset[idx].to_tmc_dataset_sample()
+        data = self.dataset[idx]
         return asdict(data)

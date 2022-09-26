@@ -1,7 +1,8 @@
+# Example of LAS generation, see detailed args in las_gen.py
 cd ..
 python las_gen.py \
 -bk fastlas/bk.las \
 -e fastlas/example.las \
--t data/train.pkl \
+-t ??? \ # train data path
 -nc 22 \
 -na 500

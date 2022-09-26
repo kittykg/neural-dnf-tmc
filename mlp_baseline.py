@@ -4,17 +4,17 @@ import torch
 from torch import nn, Tensor
 
 from analysis import ClassificationMetric, MetricValueMeter, MacroMetricMeter
-from utils import load_tmc_data, get_dnf_classifier_x_and_y
+from utils import load_multi_label_data, get_dnf_classifier_x_and_y
 
-TMC_IN = 500
-TMC_OUT = 22
+ATTR_IN = 500
+LABEL_OUT = 22
 
-USE_CUDA: bool = True
+USE_CUDA: bool = False
 BATCH_SIZE: int = 256
 DATA_PATH_DICT = {
-    "train": "data/train.pkl",
-    "val": "data/val.pkl",
-    "test": "data/test.pkl",
+    "train": "tmc_data/train.pkl",
+    "val": "tmc_data/val.pkl",
+    "test": "tmc_data/test.pkl",
 }
 LR: float = 0.001
 WEIGHT_DECAY: float = 0.00004
@@ -26,21 +26,30 @@ RANDOM_SEED: int = 73
 class MLP(nn.Module):
     def __init__(self) -> None:
         super(MLP, self).__init__()
-        self.l1 = nn.Linear(TMC_IN, 1000,  bias=False)
+        self.l1 = nn.Linear(ATTR_IN, 1000)
         self.a1 = nn.Tanh()
-        self.l2 = nn.Linear(1000, TMC_OUT, bias=False)
+        # self.l2 = nn.Linear(1000, 500)
+        # self.a2 = nn.Tanh()
+        # self.l3 = nn.Linear(500, 100)
+        # self.a3 = nn.Tanh()
+        self.l4 = nn.Linear(1000, LABEL_OUT)
 
     def forward(self, input: Tensor) -> Tensor:
         y = self.l1(input)
         y = self.a1(y)
-        return self.l2(y)
+        # y = self.l2(y)
+        # y = self.a2(y)
+        # y = self.l3(y)
+        # y = self.a3(y)
+        y = self.l4(y)
+        return y
 
 
 def train(model: MLP) -> None:
     if USE_CUDA:
         model.to("cuda")
 
-    train_loader, val_loader = load_tmc_data(
+    train_loader, val_loader = load_multi_label_data(
         is_training=True,
         batch_size=BATCH_SIZE,
         data_path_dict=DATA_PATH_DICT,
@@ -98,7 +107,7 @@ def train(model: MLP) -> None:
 
 def eval(model: MLP):
     model.eval()
-    test_loader = load_tmc_data(
+    test_loader = load_multi_label_data(
         is_training=False,
         batch_size=BATCH_SIZE,
         data_path_dict=DATA_PATH_DICT,

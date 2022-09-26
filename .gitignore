@@ -128,10 +128,25 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-
+# System and vscode
 .DS_store
-outputs/
-tmc2007-500/
 .vscode/
-data/
+
+# Project related files
 fastlas/
+tmc-2007-500/
+tmc_data/
+delicious/
+delicious_data/
+notebooks/
+
+# output files
+*.pth
+
+# config
+conf/config.yaml
+conf/environment/doc.yaml
+conf/webhook/webhook.yaml
+
+# scripts
+scripts/*.sh

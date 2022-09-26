@@ -1,0 +1,12 @@
+# Example of data preprocessing script, see data_preprocess.py for detailed args
+cd ..
+python data_preprocess.py \
+    -rtrain ??? \ # Raw train path
+    -rval ??? \ # Raw val path
+    -rtest ??? \ # Raw test path
+    -nl 22 \
+    -cat 0 \
+    -lat 0 \
+    -cft 0 \
+    -lft 0 \
+    -od ??? # Output dir

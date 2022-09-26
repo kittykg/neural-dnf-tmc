@@ -1,0 +1,6 @@
+# Example of parsing, see detailed args in arff_parse
+cd ..
+python arff_parse .py \
+    -train ??? \
+    -test ??? \
+    -od ???

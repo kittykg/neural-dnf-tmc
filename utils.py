@@ -18,10 +18,10 @@ class DataloaderMode(Enum):
 DATA_PATH_DICT_KEY = ["train", "val", "test"]
 
 
-def load_tmc_data(
+def load_multi_label_data(
     is_training: bool, batch_size: int, data_path_dict: Dict[str, str]
 ) -> Union[Tuple[DataLoader, DataLoader], DataLoader]:
-    def _get_tmc_dataloader(
+    def _get_dataloader(
         dataset_path: str,
         dataloader_mode: DataloaderMode,
     ) -> DataLoader:
@@ -35,17 +35,17 @@ def load_tmc_data(
         )
 
     if is_training:
-        train_loader = _get_tmc_dataloader(
+        train_loader = _get_dataloader(
             dataset_path=data_path_dict[DATA_PATH_DICT_KEY[0]],
             dataloader_mode=DataloaderMode.TRAIN,
         )
-        val_loader = _get_tmc_dataloader(
+        val_loader = _get_dataloader(
             dataset_path=data_path_dict[DATA_PATH_DICT_KEY[1]],
             dataloader_mode=DataloaderMode.VAL,
         )
         return train_loader, val_loader
     else:
-        test_loader = _get_tmc_dataloader(
+        test_loader = _get_dataloader(
             dataset_path=data_path_dict[DATA_PATH_DICT_KEY[2]],
             dataloader_mode=DataloaderMode.TEST,
         )
@@ -70,7 +70,7 @@ def get_dnf_classifier_x_and_y(
     return x, y
 
 
-class DeltaDelayedExponentialDecayScheduler:
+class DeltaDelayedDecayScheduler:
     initial_delta: float
     delta_decay_delay: int
     delta_decay_steps: int
@@ -92,10 +92,30 @@ class DeltaDelayedExponentialDecayScheduler:
         if step < self.delta_decay_delay:
             new_delta_val = self.initial_delta
         else:
-            delta_step = step - self.delta_decay_delay
-            new_delta_val = self.initial_delta * (
-                self.delta_decay_rate ** (delta_step // self.delta_decay_steps)
-            )
+            new_delta_val = self.calculate_new_delta(step)
         new_delta_val = 1 if new_delta_val > 1 else new_delta_val
         model.set_delta_val(new_delta_val)
+        return new_delta_val
+
+    def calculate_new_delta(self, step: int) -> float:
+        raise NotImplementedError
+
+
+class DeltaDelayedExponentialDecayScheduler(DeltaDelayedDecayScheduler):
+    def calculate_new_delta(self, step: int) -> float:
+        delta_step = step - self.delta_decay_delay
+        new_delta_val = self.initial_delta * (
+            self.delta_decay_rate ** (delta_step // self.delta_decay_steps)
+        )
+        return new_delta_val
+
+
+class DeltaDelayedArithmeticSequenceScheduler(DeltaDelayedDecayScheduler):
+    # Delta decay rate is used as the difference as in an arithmetic sequence
+
+    def calculate_new_delta(self, step: int) -> float:
+        delta_step = step - self.delta_decay_delay
+        new_delta_val = self.initial_delta + self.delta_decay_rate * (
+            delta_step // self.delta_decay_steps
+        )
         return new_delta_val

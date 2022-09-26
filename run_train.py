@@ -1,5 +1,8 @@
-import random
+from datetime import datetime
 import os
+import random
+import requests
+import traceback
 
 import hydra
 from hydra.core.hydra_config import HydraConfig
@@ -9,12 +12,18 @@ import torch
 import wandb
 
 
-from rule_learner import DNFClassifier
+from rule_learner import DNFClassifier, DoubleDNFClassifier
 from train import DnfClassifierTrainer
 
 
-@hydra.main(config_path="conf", config_name="config")
-def run_experiment(cfg: DictConfig) -> None:
+WANDB_DISABLED = True
+
+
+def post_to_discord_webhook(webhook_url: str, message: str) -> None:
+    requests.post(webhook_url, json={"content": message})
+
+
+def _run_experiment_helper(cfg: DictConfig):
     experiment_name = cfg["training"]["experiment_name"]
     model_name = cfg["training"]["model_name"]
 
@@ -33,9 +42,12 @@ def run_experiment(cfg: DictConfig) -> None:
     np.random.seed(random_seed)
 
     # Set up model
-    model_class = DNFClassifier
-    base_cfg = OmegaConf.to_container(cfg["model"]["base_dnf"])
-    model = model_class(**base_cfg)
+    if model_name == "dnf_vanilla":
+        base_cfg = OmegaConf.to_container(cfg["model"]["base_dnf"])
+        model = DNFClassifier(**base_cfg)
+    else:
+        base_cfg = OmegaConf.to_container(cfg["model"]["double_dnf"])
+        model = DoubleDNFClassifier(**base_cfg)
     model.set_delta_val(cfg["training"][model_name]["initial_delta"])
 
     torch.autograd.set_detect_anomaly(True)
@@ -56,6 +68,31 @@ def run_experiment(cfg: DictConfig) -> None:
     run.log_artifact(model_artifact)
 
 
+@hydra.main(config_path="conf", config_name="config")
+def run_experiment(cfg: DictConfig) -> None:
+    experiment_name = cfg["training"]["experiment_name"]
+    random_seed = cfg["training"]["random_seed"]
+    webhook_url = cfg["webhook"]["discord_webhook_url"]
+
+    try:
+        _run_experiment_helper(cfg)
+        webhook_msg = (
+            f"[{dt}]\nExperiment {experiment_name} (seed {random_seed}) "
+            f"on Machine {nodename} FINISHED!! Check out the log for result :P"
+        )
+    except BaseException as e:
+        nodename = os.uname().nodename
+        dt = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        webhook_msg = (
+            f"[{dt}]\nExperiment {experiment_name} (seed {random_seed}) "
+            f"on Machine {nodename} got an error!! Check that out!!"
+        )
+        print(traceback.format_exc())
+    finally:
+        post_to_discord_webhook(webhook_url, webhook_msg)
+
+
 if __name__ == "__main__":
-    os.environ["WANDB_MODE"] = "disabled"
+    if WANDB_DISABLED:
+        os.environ["WANDB_MODE"] = "disabled"
     run_experiment()

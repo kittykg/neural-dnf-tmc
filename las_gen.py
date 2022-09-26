@@ -2,13 +2,13 @@ import argparse
 import pickle
 import sys
 
-from common import TmcRawSample
+from common import MultiLabelRawSample
 
 
 def gen_las_example(
     pkl_data_path: str, save_file_path: str, num_classes: int
 ) -> None:
-    def gen_example_from_data(sample: TmcRawSample, file=sys.stdout):
+    def gen_example_from_data(sample: MultiLabelRawSample, file=sys.stdout):
         # Penalty
         print(
             f"#pos(eg_{sample.sample_id}@{10}, {{",

@@ -2,21 +2,21 @@ defaults:
   - base_parameter
 
 use_cuda: false
-experiment_name: dnf_vanilla_t3_bce
-model_name: dnf_vanilla
+experiment_name: double_dnf_bce
+model_name: double_dnf
 
-dnf_vanilla:
+double_dnf:
   optimiser: adam
   optimiser_lr: 0.001
   optimiser_weight_decay: 0.00004
   scheduler_step: 100
   # loss_func: bce
   batch_size: 512
-  epochs: 100
-  initial_delta: 0.1
-  delta_decay_delay: 10
-  delta_decay_steps: 5
-  delta_decay_rate: 1.1
+  epochs: 500
+  initial_delta: 0.01
+  delta_decay_delay: 50
+  delta_decay_steps: 50
+  delta_decay_rate: 0.1
   reg_fn: l1_mod
-  reg_lambda: 0.1
+  reg_lambda: 0.3
   macro_metric: precision # choices: precision, recall, f1-score
