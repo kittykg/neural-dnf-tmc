@@ -1,7 +1,7 @@
 defaults:
   - base_parameter
 
-use_cuda: false
+use_cuda: true
 experiment_name: dnf_vanilla_t3_bce
 model_name: dnf_vanilla
 
@@ -12,7 +12,7 @@ dnf_vanilla:
   scheduler_step: 100
   # loss_func: bce
   batch_size: 512
-  epochs: 100
+  epochs: 200
   initial_delta: 0.1
   delta_decay_delay: 10
   delta_decay_steps: 5

@@ -11,16 +11,11 @@ from omegaconf import DictConfig, OmegaConf
 import torch
 import wandb
 
-
 from rule_learner import DNFClassifier, DoubleDNFClassifier
 from train import DnfClassifierTrainer
 
 
 WANDB_DISABLED = True
-
-
-def post_to_discord_webhook(webhook_url: str, message: str) -> None:
-    requests.post(webhook_url, json={"content": message})
 
 
 def _run_experiment_helper(cfg: DictConfig):
@@ -73,15 +68,19 @@ def run_experiment(cfg: DictConfig) -> None:
     experiment_name = cfg["training"]["experiment_name"]
     random_seed = cfg["training"]["random_seed"]
     webhook_url = cfg["webhook"]["discord_webhook_url"]
+    nodename = os.uname().nodename
+
+    def post_to_discord_webhook(webhook_url: str, message: str) -> None:
+        requests.post(webhook_url, json={"content": message})
 
     try:
         _run_experiment_helper(cfg)
+        dt = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         webhook_msg = (
             f"[{dt}]\nExperiment {experiment_name} (seed {random_seed}) "
             f"on Machine {nodename} FINISHED!! Check out the log for result :P"
         )
     except BaseException as e:
-        nodename = os.uname().nodename
         dt = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         webhook_msg = (
             f"[{dt}]\nExperiment {experiment_name} (seed {random_seed}) "
