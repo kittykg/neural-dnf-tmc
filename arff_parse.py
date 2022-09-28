@@ -44,10 +44,10 @@ def parse_samples_file(file_path: str) -> List[MultiLabelRawSample]:
 
 
 def split_train_val(
-    samples: List[MultiLabelRawSample],
-    random_seed: int,
-) -> Tuple[List[MultiLabelRawSample], List[MultiLabelRawSample]]:
+    samples: List[MultiLabelRawSample], random_seed: int
+) -> List[List[MultiLabelRawSample]]:
     return train_test_split(samples, test_size=0.2, random_state=random_seed)
+
 
 # Unused oversampling code
 # def random_oversampling(data: List[MultiLabelRawSample], ratio: float = 1.0):

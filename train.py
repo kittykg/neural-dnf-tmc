@@ -118,7 +118,7 @@ class DnfClassifierTrainer:
             ]
             self.macro_metric = ClassificationMetric(macro_metric_str_val)
 
-    def train(self, model: DNFClassifier) -> OrderedDict:
+    def train(self, model: DNFClassifier) -> dict:
         seed = torch.get_rng_state()[0].item()
         log.info(f"{self.experiment_name} starts, seed: {seed}")
 

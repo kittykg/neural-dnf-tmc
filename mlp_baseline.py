@@ -133,7 +133,7 @@ def _run_mlp_baseline_helper(data_path_dict: Dict[str, str]) -> float:
     return eval(model, data_path_dict)
 
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(version_base=None, config_path="conf", config_name="config")
 def run_mlp_baseline(cfg: DictConfig) -> None:
     # Set random seed
     torch.manual_seed(RANDOM_SEED)

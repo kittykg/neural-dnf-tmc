@@ -55,15 +55,17 @@ def attribute_reduction(
         label_attr_app_check = label_attr_app_freq >= min_label_threshold
 
         # Attribute mask is idx of two checks' conjunction
-        attribute_mask = np.where(
+        attribute_mask = np.asarray(
             np.logical_and(comb_attr_app_check, label_attr_app_check)
-        )[0]
+        ).nonzero()[0]
 
     # Convert raw sample to dataset sample
-    def _get_new_data(d: MultiLabelRawSample) -> MultiLabelDatasetSample:
+    def _get_new_data(
+        d: MultiLabelRawSample,
+    ) -> Optional[MultiLabelDatasetSample]:
         temp_d = d.to_dataset_sample(total_number_attr, total_number_labels)
         # Adjust the attribute encoding
-        new_attr_encoding = temp_d.attribute_encoding[attribute_mask]
+        new_attr_encoding = temp_d.attribute_encoding[attribute_mask]  # type: ignore
         if torch.count_nonzero(new_attr_encoding) == 0:
             return None
         return MultiLabelDatasetSample(
@@ -74,7 +76,7 @@ def attribute_reduction(
 
     return [
         _get_new_data(d) for d in dataset if _get_new_data(d)
-    ], attribute_mask
+    ], attribute_mask  # type: ignore
 
 
 def data_subset_creation(
@@ -89,7 +91,7 @@ def data_subset_creation(
             d.sample_id, new_labels, d.present_attributes
         )
 
-    return [_get_new_data(d) for d in dataset if _get_new_data(d)]
+    return [_get_new_data(d) for d in dataset if _get_new_data(d)]  # type: ignore
 
 
 if __name__ == "__main__":

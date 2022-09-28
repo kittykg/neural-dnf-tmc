@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple
 import pickle
 
 from torch import Tensor
@@ -20,7 +20,7 @@ DATA_PATH_DICT_KEY = ["train", "val", "test"]
 
 def load_multi_label_data(
     is_training: bool, batch_size: int, data_path_dict: Dict[str, str]
-) -> Union[Tuple[DataLoader, DataLoader], DataLoader]:
+) -> Tuple[DataLoader, DataLoader] | DataLoader:
     def _get_dataloader(
         dataset_path: str,
         dataloader_mode: DataloaderMode,

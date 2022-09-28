@@ -63,7 +63,7 @@ def _run_experiment_helper(cfg: DictConfig):
     run.log_artifact(model_artifact)
 
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(version_base=None, config_path="conf", config_name="config")
 def run_experiment(cfg: DictConfig) -> None:
     experiment_name = cfg["training"]["experiment_name"]
     random_seed = cfg["training"]["random_seed"]

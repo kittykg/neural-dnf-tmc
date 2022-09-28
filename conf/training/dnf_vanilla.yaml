@@ -12,11 +12,11 @@ dnf_vanilla:
   scheduler_step: 100
   # loss_func: bce
   batch_size: 512
-  epochs: 200
+  epochs: 300
   initial_delta: 0.1
   delta_decay_delay: 10
   delta_decay_steps: 5
   delta_decay_rate: 1.1
   reg_fn: l1_mod
-  reg_lambda: 0.1
+  reg_lambda: 0.05
   macro_metric: precision # choices: precision, recall, f1-score
