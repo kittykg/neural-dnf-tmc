@@ -34,8 +34,8 @@ class MacroMetricMeter(Meter):
 
     # Accumulate output and target until get_average is called, such that
     # precision and f1 would be defined (avoid division by 0)
-    acc_output: List[List[int]] = []
-    acc_target: List[List[int]] = []
+    acc_output: List[List[int]]
+    acc_target: List[List[int]]
 
     def __init__(
         self,
@@ -43,6 +43,8 @@ class MacroMetricMeter(Meter):
     ) -> None:
         super(MacroMetricMeter, self).__init__()
         self.metric_choice = metric_choice
+        self.acc_output = []
+        self.acc_target = []
 
     def update(self, output: Tensor, target: Tensor) -> None:
         # Output should be in range [0, 1]
@@ -60,11 +62,12 @@ class MacroMetricMeter(Meter):
 
 class MetricValueMeter(Meter):
     metric_name: str
-    vals: List[float] = []
+    vals: List[float]
 
     def __init__(self, metric_name: str) -> None:
         super(MetricValueMeter, self).__init__()
         self.metric_name = metric_name
+        self.vals = []
 
     def update(self, val: float) -> None:
         self.vals.append(val)

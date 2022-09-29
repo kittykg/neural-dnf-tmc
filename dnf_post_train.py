@@ -227,7 +227,6 @@ class DNFPostTrainingProcessor:
         for k in DATA_PATH_DICT_KEY:
             data_path_dict[k] = env_cfg[k + "_pkl"]
 
-        # Use existing partial pkl files
         self.train_loader, self.val_loader = load_multi_label_data(
             is_training=True,
             batch_size=batch_size,
@@ -237,7 +236,7 @@ class DNFPostTrainingProcessor:
             is_training=False,
             batch_size=batch_size,
             data_path_dict=data_path_dict,
-        )   # type: ignore
+        )  # type: ignore
 
         self.test_pkl_path = env_cfg["test_pkl"]
 
@@ -306,13 +305,18 @@ class DNFPostTrainingProcessor:
             self.macro_metric,
         )
         new_perf = dnf_eval(
+            model, self.use_cuda, self.val_loader, self.macro_metric
+        )
+        new_perf_test = dnf_eval(
             model, self.use_cuda, self.test_loader, self.macro_metric
         )
-        log.info(f"Pruned conj count:   {prune_count}")
-        log.info(f"New perf after conj: {new_perf:.3f}\n")
+        log.info(f"Pruned conj count:           {prune_count}")
+        log.info(f"New perf after conj:         {new_perf:.3f}\n")
+        log.info(f"New perf after prune (test): {new_perf_test:.3f}")
 
         torch.save(model.state_dict(), self.pth_file_base_name + "_pruned.pth")
-        self.result_dict["after_prune"] = round(new_perf, 3)
+        self.result_dict["after_prune_val"] = round(new_perf, 3)
+        self.result_dict["after_prune_test"] = round(new_perf_test, 3)
 
     def _tuning(self, model: DNFClassifier) -> None:
         log.info("Tuning of DNF start")
@@ -375,7 +379,7 @@ class DNFPostTrainingProcessor:
 
                 optimizer.zero_grad()
                 x, y = get_dnf_classifier_x_and_y(data, self.use_cuda)
-                y_hat = model(x)
+                y_hat = (torch.tanh(model(x)) + 1) / 2
 
                 wc = dnf_weight_pushing_constraint()
                 loss = (

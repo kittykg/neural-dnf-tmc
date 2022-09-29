@@ -64,7 +64,7 @@ def convert_result_dict_to_discord_message(
     s += f"""```
                         Macro {metric_choice.value}
         After train     {rd['after_train_perf']}
-        After prune     {rd['after_prune']}
+        After prune     {rd['after_prune_test']}
         After tune      {rd['after_tune']}
         After thresh    {rd['after_threshold_test']}
 
