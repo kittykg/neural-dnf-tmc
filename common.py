@@ -11,6 +11,18 @@ class MultiLabelDatasetSample:
     label_encoding: Tensor
     attribute_encoding: Tensor
 
+    def __eq__(self, __o: object) -> bool:
+        if not isinstance(__o, MultiLabelDatasetSample):
+            return False
+        else:
+            return (
+                self.sample_id == __o.sample_id
+                and bool(torch.all(self.label_encoding == __o.label_encoding))
+                and bool(
+                    torch.all(self.attribute_encoding == __o.attribute_encoding)
+                )
+            )
+
 
 @dataclass
 class MultiLabelRawSample:

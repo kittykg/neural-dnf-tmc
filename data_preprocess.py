@@ -8,7 +8,7 @@ import torch
 from common import MultiLabelRawSample, MultiLabelDatasetSample
 
 
-def attribute_reduction(
+def attribute_reduction_mask_count_based(
     dataset: List[MultiLabelRawSample],
     total_number_attr: int,
     total_number_labels: int,
@@ -16,54 +16,98 @@ def attribute_reduction(
     label_appearance_threshold: int,
     min_comb_threshold: int,
     min_label_threshold: int,
-    precomputed_mask: Optional[np.ndarray] = None,
-) -> Tuple[List[MultiLabelDatasetSample], np.ndarray]:
-    if precomputed_mask is not None:
-        attribute_mask = precomputed_mask
-    else:
-        combination_attr_counter = dict()
-        label_attr_matrix = np.zeros((total_number_labels, total_number_attr))
+) -> np.ndarray:
+    combination_attr_counter = dict()
+    label_attr_matrix = np.zeros((total_number_labels, total_number_attr))
 
-        for d in dataset:
-            # Update label_attr_matrix
-            for l in d.labels:
-                for a in d.present_attributes:
-                    label_attr_matrix[l][a] += 1
-            # Update combination_attr_counter
-            comb = ",".join([str(l) for l in d.labels])
-            if comb not in combination_attr_counter:
-                combination_attr_counter[comb] = np.zeros(500)
+    for d in dataset:
+        # Update label_attr_matrix
+        for l in d.labels:
             for a in d.present_attributes:
-                combination_attr_counter[comb][a] += 1
+                label_attr_matrix[l][a] += 1
+        # Update combination_attr_counter
+        comb = ",".join([str(l) for l in d.labels])
+        if comb not in combination_attr_counter:
+            combination_attr_counter[comb] = np.zeros(500)
+        for a in d.present_attributes:
+            combination_attr_counter[comb][a] += 1
 
-        # Stack the combination_attr_counter to form a matrix
-        combination_attr_matrix = np.stack(
-            list(combination_attr_counter.values()), axis=0
-        )
+    # Stack the combination_attr_counter to form a matrix
+    combination_attr_matrix = np.stack(
+        list(combination_attr_counter.values()), axis=0
+    )
 
-        # Compute the frequency of each label reaching appearance threshold in
-        # both counter matrices.
-        comb_attr_app_freq = np.count_nonzero(
-            combination_attr_matrix >= comb_appearance_threshold, axis=0
-        )
-        label_attr_app_freq = np.count_nonzero(
-            label_attr_matrix >= label_appearance_threshold, axis=0
-        )
+    # Compute the frequency of each label reaching appearance threshold in
+    # both counter matrices.
+    comb_attr_app_freq = np.count_nonzero(
+        combination_attr_matrix >= comb_appearance_threshold, axis=0
+    )
+    label_attr_app_freq = np.count_nonzero(
+        label_attr_matrix >= label_appearance_threshold, axis=0
+    )
 
-        # Check if the frequency reaches a threshold
-        comb_attr_app_check = comb_attr_app_freq >= min_comb_threshold
-        label_attr_app_check = label_attr_app_freq >= min_label_threshold
+    # Check if the frequency reaches a threshold
+    comb_attr_app_check = comb_attr_app_freq >= min_comb_threshold
+    label_attr_app_check = label_attr_app_freq >= min_label_threshold
 
-        # Attribute mask is idx of two checks' conjunction
-        attribute_mask = np.asarray(
-            np.logical_and(comb_attr_app_check, label_attr_app_check)
-        ).nonzero()[0]
+    # Attribute mask is idx of two checks' conjunction
+    attribute_mask = np.asarray(
+        np.logical_and(comb_attr_app_check, label_attr_app_check)
+    ).nonzero()[0]
 
-    # Convert raw sample to dataset sample
+    return attribute_mask
+
+
+def attribute_reduction_mask_entropy_base(
+    dataset: List[MultiLabelRawSample],
+    total_number_attr: int,
+    total_number_labels: int,
+    entropy_threshold: float,
+) -> np.ndarray:
+    label_attr_true_matrix = np.zeros((total_number_labels, total_number_attr))
+    label_attr_false_matrix = np.zeros((total_number_labels, total_number_attr))
+    label_count = np.zeros(total_number_labels)
+
+    for d in dataset:
+        for l in d.labels:
+            label_count[l] += 1
+            for a in range(total_number_attr):
+                if a in d.present_attributes:
+                    label_attr_true_matrix[l][a] += 1
+                else:
+                    label_attr_false_matrix[l][a] += 1
+
+    # Compute the probability of each attribute being true in a label,
+    # and the probability of each attribute being false in a label.
+    # Then compute the entropy of each attribute in a label.
+    # Add epsilon to avoid log(0).
+    epsilon = np.finfo(np.float32).eps
+    p_true = label_attr_true_matrix.T / label_count
+    p_true = np.where(p_true == 0, p_true + epsilon, p_true)
+    p_false = label_attr_false_matrix.T / label_count
+    p_false = np.where(p_false == 0, p_false + epsilon, p_false)
+
+    entropy = -(p_true * np.log(p_true)) - p_false * np.log(p_false)  # type: ignore
+
+    # Check if the entropy of an attribute is low in all labels, take those
+    # attributes (get the mask).
+    sat_entropy = np.all(entropy <= entropy_threshold, axis=1)
+    attribute_mask = np.asarray(sat_entropy).nonzero()[0]
+
+    return attribute_mask
+
+
+def attribute_reduction(
+    dataset: List[MultiLabelRawSample],
+    raw_total_number_attr: int,
+    total_number_labels: int,
+    attribute_mask: np.ndarray,
+) -> List[MultiLabelDatasetSample]:
+    # Convert raw sample to dataset sample with attribute_mask
     def _get_new_data(
         d: MultiLabelRawSample,
     ) -> Optional[MultiLabelDatasetSample]:
-        temp_d = d.to_dataset_sample(total_number_attr, total_number_labels)
+        temp_d = d.to_dataset_sample(raw_total_number_attr, total_number_labels)
         # Adjust the attribute encoding
         new_attr_encoding = temp_d.attribute_encoding[attribute_mask]  # type: ignore
         if torch.count_nonzero(new_attr_encoding) == 0:
@@ -74,9 +118,7 @@ def attribute_reduction(
             new_attr_encoding,
         )
 
-    return [
-        _get_new_data(d) for d in dataset if _get_new_data(d)
-    ], attribute_mask  # type: ignore
+    return [_get_new_data(d) for d in dataset if _get_new_data(d)]  # type: ignore
 
 
 def data_subset_creation(
@@ -96,6 +138,8 @@ def data_subset_creation(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+
+    # Base arguments
     parser.add_argument("-rtrain", type=str, help="Raw train pkl path")
     parser.add_argument("-rval", type=str, help="Raw val pkl path")
     parser.add_argument("-rtest", type=str, help="Raw test pkl path")
@@ -109,69 +153,127 @@ if __name__ == "__main__":
         "-nl", type=int, help="Number of labels after filtering"
     )
     parser.add_argument(
-        "-cat", type=int, help="Combination-attribute appearance threshold"
+        "-od", type=str, help="Output directory (with trailing '/')"
     )
     parser.add_argument(
-        "-lat", type=int, help="Label-attribute appearance threshold"
+        "-m",
+        type=str,
+        choices=["count", "entropy"],
+        required=True,
+        help="The method used to compute attribute reduction mask",
+    )
+
+    # Arguments for count-based attribute reduction
+    parser.add_argument(
+        "-cat",
+        type=int,
+        nargs="?",
+        default=None,
+        help="Count-based: Combination-attribute Appearance Threshold",
     )
     parser.add_argument(
-        "-cft", type=int, help="Combination-attribute frequency threshold"
+        "-lat",
+        type=int,
+        nargs="?",
+        default=None,
+        help="Count-based: Label-attribute Appearance Threshold",
     )
     parser.add_argument(
-        "-lft", type=int, help="Label-attribute frequency threshold"
+        "-cft",
+        type=int,
+        nargs="?",
+        default=None,
+        help="Count-based: Combination-attribute Frequency Threshold",
     )
     parser.add_argument(
-        "-od", type=str, help="Output directory (no trailing '/')"
+        "-lft",
+        type=int,
+        nargs="?",
+        default=None,
+        help="Count-based: Label-attribute Frequency Threshold",
     )
+
+    # Arguments for entropy-based attribute reduction
+    parser.add_argument(
+        "-et",
+        type=float,
+        nargs="?",
+        default=None,
+        help="Entropy-based: Entropy threshold",
+    )
+
+    # Argument check
     args = parser.parse_args()
+    if args.m == "count":
+        # Check cat, lat, cft, lft are provided with a value
+        for a in ["cat", "lat", "cft", "lft"]:
+            assert vars(args)[a], f"No value provided under -{a} when -m=count"
+    else:
+        # Check et is provided
+        assert args.et, f"No value provided under -et when -m=entropy"
 
-    print("Start pre-process")
+    print("Arguments accepted, start pre-processing")
 
-    # Train dataset
+    # Generate subsets filtered by labels only
     with open(args.rtrain, "rb") as f:
         train_raw = pickle.load(f)
-    train_dataset, mask = attribute_reduction(
-        dataset=data_subset_creation(train_raw, args.nl),
-        total_number_attr=args.rna,
+    sub_train = data_subset_creation(train_raw, args.nl)
+
+    with open(args.rval, "rb") as f:
+        val_raw = pickle.load(f)
+    sub_val = data_subset_creation(val_raw, args.nl)
+
+    with open(args.rtest, "rb") as f:
+        test_raw = pickle.load(f)
+    sub_test = data_subset_creation(test_raw, args.nl)
+
+    # Compute the attribute mask for attribute reduction
+    if args.m == "count":
+        # Count-based attribute reduction
+        attribute_mask = attribute_reduction_mask_count_based(
+            dataset=sub_train,
+            total_number_attr=args.rna,
+            total_number_labels=args.nl,
+            comb_appearance_threshold=args.cat,
+            label_appearance_threshold=args.lat,
+            min_comb_threshold=args.cft,
+            min_label_threshold=args.lft,
+        )
+    else:
+        # Entropy-based attribute reduction
+        attribute_mask = attribute_reduction_mask_entropy_base(
+            dataset=sub_train,
+            total_number_attr=args.rna,
+            total_number_labels=args.nl,
+            entropy_threshold=args.et,
+        )
+
+    # Filter subsets' attributes and save
+    train_dataset = attribute_reduction(
+        dataset=sub_train,
+        raw_total_number_attr=args.rna,
         total_number_labels=args.nl,
-        comb_appearance_threshold=args.cat,
-        label_appearance_threshold=args.lat,
-        min_comb_threshold=args.cft,
-        min_label_threshold=args.lft,
+        attribute_mask=attribute_mask,
     )
     with open(f"{args.od}/train.pkl", "wb") as f:
         pickle.dump(train_dataset, f)
     print("Processed train dataset stored")
 
-    # Val dataset
-    with open(args.rval, "rb") as f:
-        val_raw = pickle.load(f)
-    val_dataset, _ = attribute_reduction(
-        dataset=data_subset_creation(val_raw, args.nl),
-        total_number_attr=args.rna,
+    val_dataset = attribute_reduction(
+        dataset=sub_val,
+        raw_total_number_attr=args.rna,
         total_number_labels=args.nl,
-        comb_appearance_threshold=args.cat,
-        label_appearance_threshold=args.lat,
-        min_comb_threshold=args.cft,
-        min_label_threshold=args.lft,
-        precomputed_mask=mask,
+        attribute_mask=attribute_mask,
     )
     with open(f"{args.od}/val.pkl", "wb") as f:
         pickle.dump(val_dataset, f)
     print("Processed val dataset stored")
 
-    # Test dataset
-    with open(args.rtest, "rb") as f:
-        test_raw = pickle.load(f)
-    test_dataset, _ = attribute_reduction(
-        dataset=data_subset_creation(test_raw, args.nl),
-        total_number_attr=args.rna,
+    test_dataset = attribute_reduction(
+        dataset=sub_test,
+        raw_total_number_attr=args.rna,
         total_number_labels=args.nl,
-        comb_appearance_threshold=args.cat,
-        label_appearance_threshold=args.lat,
-        min_comb_threshold=args.cft,
-        min_label_threshold=args.lft,
-        precomputed_mask=mask,
+        attribute_mask=attribute_mask,
     )
     with open(f"{args.od}/test.pkl", "wb") as f:
         pickle.dump(test_dataset, f)
@@ -179,17 +281,22 @@ if __name__ == "__main__":
 
     # Store mask and median
     with open(f"{args.od}/mask.pkl", "wb") as f:
-        pickle.dump(mask, f)
+        pickle.dump(attribute_mask, f)
     print("Attr mask stored")
 
     print()
     print("---------------Summary---------------")
     print(f"Number of labels:          {args.nl}")
-    print(f"Comb-attr appearance t:    {args.cat}")
-    print(f"Label-attr appearance t:   {args.lat}")
-    print(f"Comb-attr frequence t:     {args.cft}")
-    print(f"Label-attr frequence t:    {args.lft}")
-    print(f"Number of attributes used: {len(mask)}")
+    if args.m == "count":
+        print(f"Attribute reduction:       Count-based")
+        print(f"Comb-attr appearance t:    {args.cat}")
+        print(f"Label-attr appearance t:   {args.lat}")
+        print(f"Comb-attr frequence t:     {args.cft}")
+        print(f"Label-attr frequence t:    {args.lft}")
+    else:
+        print(f"Attribute reduction:       Entropy-based")
+        print(f"Entropy threshold:         {args.et}")
+    print(f"Number of attributes used: {len(attribute_mask)}")
     print(f"Num train samples:         {len(train_dataset)}")
     print(f"Num val samples:           {len(val_dataset)}")
     print(f"Num test samples:          {len(test_dataset)}")

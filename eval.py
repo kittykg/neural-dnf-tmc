@@ -81,7 +81,7 @@ def asp_eval(
             # Find predicted all label
             p = re.compile(r"\d+")
             predict_labels = [int(l) for l in p.findall(str(asp_model))]
-            prediction_one_hot = torch.ones(d.label_encoding.shape)
+            prediction_one_hot = torch.zeros(d.label_encoding.shape)
             prediction_one_hot[predict_labels] = 1
 
         all_prediction_one_hot.append(prediction_one_hot.int().tolist())
