@@ -2,13 +2,13 @@ import argparse
 import pickle
 import sys
 
-from common import MultiLabelRawSample
+from common import MultiLabelDatasetSample
 
 
 def gen_las_example(
     pkl_data_path: str, save_file_path: str, num_classes: int
 ) -> None:
-    def gen_example_from_data(sample: MultiLabelRawSample, file=sys.stdout):
+    def gen_example_from_data(sample: MultiLabelDatasetSample, file=sys.stdout):
         # Penalty
         print(
             f"#pos(eg_{sample.sample_id}@{10}, {{",
@@ -16,28 +16,31 @@ def gen_las_example(
         )
 
         # Inclusion set
-        inclusion_set = ",\n".join([f"    class({c})" for c in sample.labels])
+        inclusion_set = ",\n".join(
+            [
+                f"    class({i})"
+                for i, c in enumerate(sample.label_encoding)
+                if c == 1
+            ]
+        )
         print(inclusion_set, file=file)
         print("}, {", file=file)
 
         # Exclusion set
         exclusion_set = ",\n".join(
-            filter(
-                lambda j: j != "",
-                map(
-                    lambda k: f"    class({k})"
-                    if k not in sample.labels
-                    else "",
-                    range(num_classes),
-                ),
-            )
+            [
+                f"    class({i})"
+                for i, c in enumerate(sample.label_encoding)
+                if c == 0
+            ]
         )
         print(exclusion_set, file=file)
         print("}, {", file=file)
 
         # Context
-        for i in sample.present_attributes:
-            print(f"    has_attr_{i}.", file=file)
+        for i, a in enumerate(sample.attribute_encoding):
+            if a == 1:
+                print(f"    has_attr_{i}.", file=file)
         print("}).\n", file=file)
 
     with open(pkl_data_path, "rb") as f:
