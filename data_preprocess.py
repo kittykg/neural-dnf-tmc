@@ -1,4 +1,5 @@
 import argparse
+from itertools import chain, combinations
 import pickle
 from typing import List, Optional, Tuple
 
@@ -93,6 +94,115 @@ def attribute_reduction_mask_entropy_base(
     # attributes (get the mask).
     sat_entropy = np.all(entropy <= entropy_threshold, axis=1)
     attribute_mask = np.asarray(sat_entropy).nonzero()[0]
+
+    return attribute_mask
+
+
+def attribute_reduction_mask_mi_based(
+    dataset: List[MultiLabelRawSample],
+    total_number_attr: int,
+    total_number_labels: int,
+    mi_threshold: float,
+) -> np.ndarray:
+    # $I(X_i;Y) = H(X_i) - H(X_i|Y)$ 
+    # $X_i$: Attribute $Y$: Label combination
+    # To calculate MI, we need:
+    # $H(X_i)$: this needs to know $p(x_i)$
+    # $H(X_i|Y)$: this needs to know $p(y)$, $p(x_i|y)$
+
+    # Get all combinations
+    labels = list(range(3))
+    comb_keys_chain = chain.from_iterable(
+        combinations(labels, r) for r in range(1, total_number_labels + 1)
+    )
+    comb_keys_str_list = [",".join(str(s) for s in k) for k in comb_keys_chain]
+
+    # Counting
+    combination_dict = {k: 0 for k in comb_keys_str_list}
+    comb_attr_true_matrix = np.zeros(
+        (len(comb_keys_str_list), total_number_attr)
+    )
+    comb_attr_false_matrix = np.zeros(
+        (len(comb_keys_str_list), total_number_attr)
+    )
+    attr_true_matrix = np.zeros(total_number_attr)
+    attr_false_matrix = np.zeros(total_number_attr)
+
+    for d in dataset:
+        for a in range(total_number_attr):
+            if a in d.present_attributes:
+                attr_true_matrix[a] += 1
+            else:
+                attr_false_matrix[a] += 1
+
+        comb_key = ",".join([str(l) for l in d.labels])
+        combination_dict[comb_key] += 1
+        i = comb_keys_str_list.index(comb_key)
+
+        for j in range(total_number_attr):
+            if j in d.present_attributes:
+                comb_attr_true_matrix[i][j] += 1
+            else:
+                comb_attr_false_matrix[i][j] += 1
+
+    combination_count_matrix = np.array(
+        [combination_dict[k] for k in comb_keys_str_list]
+    )
+
+    # Count checks
+    assert np.all((attr_true_matrix + attr_false_matrix) == len(dataset))
+    for i in range(len(comb_keys_str_list)):
+        elem = (comb_attr_true_matrix + comb_attr_false_matrix)[i, 0]
+        assert np.all(
+            (comb_attr_true_matrix + comb_attr_false_matrix)[i, :] == elem
+        )
+    assert np.all(
+        (comb_attr_true_matrix + comb_attr_false_matrix)[:, 0]
+        == combination_count_matrix
+    )
+    assert np.sum(combination_count_matrix) == len(dataset)
+
+    # Epsilon for log calculation
+    epsilon = np.finfo(np.float32).eps
+
+    # p(x_i)
+    p_attr_true = attr_true_matrix / len(dataset)  # p(x_i=true)
+    p_attr_true = np.where(p_attr_true == 0, p_attr_true + epsilon, p_attr_true)
+    p_attr_true = np.where(p_attr_true == 1, p_attr_true - epsilon, p_attr_true)
+    p_attr_false = 1 - p_attr_true  # p(x_i=false)
+
+    # H(Xi)
+    attr_entropy = -p_attr_true * np.log(p_attr_true) - p_attr_false * np.log(
+        p_attr_false
+    )
+
+    # p(y)
+    p_comb = combination_count_matrix / len(dataset)
+
+    # p(x_i|y)
+    p_attr_true_comb = comb_attr_true_matrix.T / combination_count_matrix
+    p_attr_true_comb = np.where(
+        p_attr_true_comb == 0, p_attr_true_comb + epsilon, p_attr_true_comb
+    )
+    p_attr_true_comb = np.where(
+        p_attr_true_comb == 1, p_attr_true_comb - epsilon, p_attr_true_comb
+    )
+    p_attr_false_comb = 1 - p_attr_true_comb
+
+    attr_comb_entropy_parts = p_comb * (
+        p_attr_true_comb * np.log(p_attr_true_comb)
+        + p_attr_false_comb * np.log(p_attr_false_comb)
+    )
+    attr_comb_entropy_parts = attr_comb_entropy_parts[
+        :, ~np.isnan(attr_comb_entropy_parts).any(axis=0)
+    ] # ignore any nan column
+    # H(X_i|Y)
+    attr_comb_entropy = -np.sum(attr_comb_entropy_parts, axis=1)
+
+    # I(X_i;Y)
+    mi_attr_comb = attr_entropy - attr_comb_entropy
+
+    attribute_mask = np.asarray(mi_attr_comb >= mi_threshold).nonzero()[0]
 
     return attribute_mask
 
@@ -241,11 +351,11 @@ if __name__ == "__main__":
         )
     else:
         # Entropy-based attribute reduction
-        attribute_mask = attribute_reduction_mask_entropy_base(
+        attribute_mask = attribute_reduction_mask_mi_based(
             dataset=sub_train,
             total_number_attr=args.rna,
             total_number_labels=args.nl,
-            entropy_threshold=args.et,
+            mi_threshold=args.et,
         )
 
     # Filter subsets' attributes and save
