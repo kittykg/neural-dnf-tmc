@@ -11,7 +11,7 @@ def gen_las_example(
     def gen_example_from_data(sample: MultiLabelDatasetSample, file=sys.stdout):
         # Penalty
         print(
-            f"#pos(eg_{sample.sample_id}@{10}, {{",
+            f"#pos(eg_{sample.sample_id}@{1}, {{",
             file=file,
         )
 

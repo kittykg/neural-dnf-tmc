@@ -1,6 +1,6 @@
 import logging
 import pickle
-from typing import Callable, Dict, Iterable, List, OrderedDict, Tuple
+from typing import Callable, Dict, Iterable, List, Tuple
 
 from omegaconf import DictConfig, OmegaConf
 import torch
@@ -108,66 +108,53 @@ def apply_threshold(
 
 
 def extract_asp_rules(sd: dict, flatten: bool = False) -> List[str]:
-    output_rules = []
-
-    # Get all conjunctions
-    conj_w = sd["dnf.conjunctions.weights"]
-    conjunction_map = dict()
-    for i, w in enumerate(conj_w):
-        if torch.all(w == 0):
-            # No conjunction is applied here
-            continue
-
-        conjuncts = []
-        for j, v in enumerate(w):
-            if v < 0:
-                # Negative weight, negate the atom
-                conjuncts.append(f"not a{j}")
-            elif v > 0:
-                # Positive weight, normal atom
-                conjuncts.append(f"a{j}")
-
-        conjunction_map[i] = conjuncts
-
-    if not flatten:
-        # Add conjunctions as auxilary predicates into final rules list
-        # if not flatten
-        for k, v in conjunction_map.items():
-            output_rules.append(f"conj_{k} :- {', '.join(v)}.")
-
-    # Get DNF
     disj_w = sd["dnf.disjunctions.weights"]
     not_covered_labels = []
+    required_conj = []
+    # Create disjunction dictionary -- disjunct id: [(sign, conjunction id)]
+    disjunct_dict: Dict[int, List[Tuple[int, int]]] = dict()
     for i, w in enumerate(disj_w):
         if torch.all(w == 0):
             # No DNF for label i
             not_covered_labels.append(i)
             continue
 
-        disjuncts = []
+        disjunct_dict[i] = []
         for j, v in enumerate(w):
-            if v < 0 and j in conjunction_map:
-                # Negative weight, negate the existing conjunction
-                if flatten:
-                    # Need to add auxilary predicate (conj_X) which is not yet
-                    # in the final rules list
-                    output_rules.append(
-                        f"conj_{j} :- {', '.join(conjunction_map[j])}."
-                    )
-                    output_rules.append(f"label({i}) :- not conj_{j}.")
-                else:
-                    disjuncts.append(f"not conj_{j}")
-            elif v > 0 and j in conjunction_map:
-                # Postivie weight, add normal conjunction
-                if flatten:
-                    body = ", ".join(conjunction_map[j])
-                    output_rules.append(f"label({i}) :- {body}.")
-                else:
-                    disjuncts.append(f"conj_{j}")
+            if v != 0:
+                # Tuple: (sign, conj id)
+                disjunct_dict[i].append((int(torch.sign(v).item()), j))
+                required_conj.append(j)
 
-        if not flatten:
-            for disjunct in disjuncts:
-                output_rules.append(f"label({i}) :- {disjunct}.")
+    conj_w = sd["dnf.conjunctions.weights"]
+    # Create conjunction dictionary -- conjunct id: [atom]
+    conjunct_dict: Dict[int, List[str]] = dict()
+    for i, w in enumerate(conj_w):
+        if i not in required_conj:
+            # Unused conjunction
+            continue
+
+        conjunct_dict[i] = []
+        for j, v in enumerate(w):
+            if v < 0:
+                conjunct_dict[i].append(f"not a{j}")
+            elif v > 0:
+                conjunct_dict[i].append(f"a{j}")
+
+    # Construct rules with the two dictionaries
+    output_rules = []
+    for disj_id, ts in disjunct_dict.items():
+        for (sign, conj_id) in ts:
+            conj_body = ", ".join(conjunct_dict[conj_id])
+            if sign == 1 and flatten:
+                output_rules.append(f"label({disj_id}) :- {conj_body}.")
+            else:
+                output_rules.append(f"conj_{conj_id} :- {conj_body}.")
+                output_rules.append(
+                    f"label({disj_id}) :- "  # head
+                    + ("" if sign == 1 else "not")  # negation if needed
+                    + f" conj_{conj_id}."  # body
+                )
 
     return output_rules
 

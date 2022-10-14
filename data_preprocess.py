@@ -59,59 +59,20 @@ def attribute_reduction_mask_count_based(
     return attribute_mask
 
 
-def attribute_reduction_mask_entropy_base(
-    dataset: List[MultiLabelRawSample],
-    total_number_attr: int,
-    total_number_labels: int,
-    entropy_threshold: float,
-) -> np.ndarray:
-    label_attr_true_matrix = np.zeros((total_number_labels, total_number_attr))
-    label_attr_false_matrix = np.zeros((total_number_labels, total_number_attr))
-    label_count = np.zeros(total_number_labels)
-
-    for d in dataset:
-        for l in d.labels:
-            label_count[l] += 1
-            for a in range(total_number_attr):
-                if a in d.present_attributes:
-                    label_attr_true_matrix[l][a] += 1
-                else:
-                    label_attr_false_matrix[l][a] += 1
-
-    # Compute the probability of each attribute being true in a label,
-    # and the probability of each attribute being false in a label.
-    # Then compute the entropy of each attribute in a label.
-    # Add epsilon to avoid log(0).
-    epsilon = np.finfo(np.float32).eps
-    p_true = label_attr_true_matrix.T / label_count
-    p_true = np.where(p_true == 0, p_true + epsilon, p_true)
-    p_false = label_attr_false_matrix.T / label_count
-    p_false = np.where(p_false == 0, p_false + epsilon, p_false)
-
-    entropy = -(p_true * np.log(p_true)) - p_false * np.log(p_false)  # type: ignore
-
-    # Check if the entropy of an attribute is low in all labels, take those
-    # attributes (get the mask).
-    sat_entropy = np.all(entropy <= entropy_threshold, axis=1)
-    attribute_mask = np.asarray(sat_entropy).nonzero()[0]
-
-    return attribute_mask
-
-
 def attribute_reduction_mask_mi_based(
     dataset: List[MultiLabelRawSample],
     total_number_attr: int,
     total_number_labels: int,
     mi_threshold: float,
 ) -> np.ndarray:
-    # $I(X_i;Y) = H(X_i) - H(X_i|Y)$ 
+    # $I(X_i;Y) = H(X_i) - H(X_i|Y)$
     # $X_i$: Attribute $Y$: Label combination
     # To calculate MI, we need:
     # $H(X_i)$: this needs to know $p(x_i)$
     # $H(X_i|Y)$: this needs to know $p(y)$, $p(x_i|y)$
 
     # Get all combinations
-    labels = list(range(3))
+    labels = list(range(total_number_labels))
     comb_keys_chain = chain.from_iterable(
         combinations(labels, r) for r in range(1, total_number_labels + 1)
     )
@@ -195,7 +156,7 @@ def attribute_reduction_mask_mi_based(
     )
     attr_comb_entropy_parts = attr_comb_entropy_parts[
         :, ~np.isnan(attr_comb_entropy_parts).any(axis=0)
-    ] # ignore any nan column
+    ]  # ignore any nan column
     # H(X_i|Y)
     attr_comb_entropy = -np.sum(attr_comb_entropy_parts, axis=1)
 
@@ -268,7 +229,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-m",
         type=str,
-        choices=["count", "entropy"],
+        choices=["count", "mi"],
         required=True,
         help="The method used to compute attribute reduction mask",
     )
@@ -303,13 +264,13 @@ if __name__ == "__main__":
         help="Count-based: Label-attribute Frequency Threshold",
     )
 
-    # Arguments for entropy-based attribute reduction
+    # Arguments for mutual-information-based attribute reduction
     parser.add_argument(
-        "-et",
+        "-mit",
         type=float,
         nargs="?",
         default=None,
-        help="Entropy-based: Entropy threshold",
+        help="Mutual-information-based: MI threshold",
     )
 
     # Argument check
@@ -320,7 +281,7 @@ if __name__ == "__main__":
             assert vars(args)[a], f"No value provided under -{a} when -m=count"
     else:
         # Check et is provided
-        assert args.et, f"No value provided under -et when -m=entropy"
+        assert args.mit, f"No value provided under -mit when -m=mi"
 
     print("Arguments accepted, start pre-processing")
 
@@ -355,7 +316,7 @@ if __name__ == "__main__":
             dataset=sub_train,
             total_number_attr=args.rna,
             total_number_labels=args.nl,
-            mi_threshold=args.et,
+            mi_threshold=args.mit,
         )
 
     # Filter subsets' attributes and save
@@ -405,9 +366,12 @@ if __name__ == "__main__":
         print(f"Label-attr frequence t:    {args.lft}")
     else:
         print(f"Attribute reduction:       Entropy-based")
-        print(f"Entropy threshold:         {args.et}")
+        print(f"MI threshold:              {args.mit}")
     print(f"Number of attributes used: {len(attribute_mask)}")
     print(f"Num train samples:         {len(train_dataset)}")
     print(f"Num val samples:           {len(val_dataset)}")
     print(f"Num test samples:          {len(test_dataset)}")
+    print(f"Num train skipped:         {len(sub_train) - len(train_dataset)}")
+    print(f"Num val skipped:           {len(sub_val) - len(val_dataset)}")
+    print(f"Num test skipped:          {len(sub_test) - len(test_dataset)}")
     print("-------------------------------------")

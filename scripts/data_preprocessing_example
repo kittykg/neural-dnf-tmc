@@ -14,12 +14,12 @@ python data_preprocess.py \
     -lft 0 \
     -od ??? # Output dir
 
-# Entropy-based data preprocessing
+# Mutual-information-based data preprocessing
 python data_preprocess.py \
     -rtrain ??? \ # Raw train path
     -rval ??? \ # Raw val path
     -rtest ??? \ # Raw test path
     -nl 22 \
-    -m entropy \
-    -et 0.1 \
+    -m mi \
+    -mit 0.1 \
     -od ??? # Output dir

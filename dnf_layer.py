@@ -58,29 +58,6 @@ class SemiSymbolic(nn.Module):
         return sum
 
 
-class ConstraintLayer(SemiSymbolic):
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        delta: float,
-        ordered_constraint_list: List[List[int]],
-        enable_training: bool = False,
-    ):
-        super(ConstraintLayer, self).__init__(
-            in_features, out_features, SemiSymbolicLayerType.CONJUNCTION, delta
-        )
-        self.weights.data.fill_(0)
-        for class_idx, cl in enumerate(ordered_constraint_list):
-            if len(cl) == 0:
-                self.weights.data[class_idx, class_idx] = 6
-            else:
-                for i in cl:
-                    self.weights.data[class_idx, i] = -6
-            if not enable_training:
-                self.requires_grad_(False)
-
-
 class DNF(nn.Module):
     conjunctions: SemiSymbolic
     disjunctions: SemiSymbolic
