@@ -16,16 +16,17 @@ from analysis import ClassificationMetric, MetricValueMeter, MacroMetricMeter
 from utils import load_multi_label_data, get_dnf_classifier_x_and_y
 
 # MLP baseline experiment hyperparameter
-EXPERIMENT_NAME = "mlp_t3"
-ATTR_IN = 46
-LABEL_OUT = 3
+EXPERIMENT_NAME = "mlp_t15"
+ATTR_IN = 103
+LABEL_OUT = 22
+INTERMEDIATE_LAYER = LABEL_OUT * 3
 
 USE_CUDA: bool = True
-BATCH_SIZE: int = 256
+BATCH_SIZE: int = 512
 LR: float = 0.001
 WEIGHT_DECAY: float = 0.00004
-EPOCHS: int = 100
-MACRO_METRIC: ClassificationMetric = ClassificationMetric.PRECISION
+EPOCHS: int = 300
+MACRO_METRIC: ClassificationMetric = ClassificationMetric.F1_SCORE
 RANDOM_SEED: int = 73
 
 log = logging.getLogger()
@@ -34,22 +35,14 @@ log = logging.getLogger()
 class MLP(nn.Module):
     def __init__(self) -> None:
         super(MLP, self).__init__()
-        self.l1 = nn.Linear(ATTR_IN, 1000)
+        self.l1 = nn.Linear(ATTR_IN, INTERMEDIATE_LAYER)
         self.a1 = nn.Tanh()
-        # self.l2 = nn.Linear(1000, 500)
-        # self.a2 = nn.Tanh()
-        # self.l3 = nn.Linear(500, 100)
-        # self.a3 = nn.Tanh()
-        self.l4 = nn.Linear(1000, LABEL_OUT)
+        self.l2 = nn.Linear(INTERMEDIATE_LAYER, LABEL_OUT)
 
     def forward(self, input: Tensor) -> Tensor:
         y = self.l1(input)
         y = self.a1(y)
-        # y = self.l2(y)
-        # y = self.a2(y)
-        # y = self.l3(y)
-        # y = self.a3(y)
-        y = self.l4(y)
+        y = self.l2(y)
         return y
 
 

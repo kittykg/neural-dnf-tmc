@@ -1,8 +1,8 @@
 import logging
 import pickle
-from typing import Callable, Dict, Iterable, List, Tuple
+from typing import Callable, Dict, Iterable, List
 
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 import torch
 from torch import Tensor
 from torch.optim import Optimizer
@@ -89,6 +89,21 @@ def remove_unused_conjunctions(model: DNFClassifier) -> int:
     return unused_count
 
 
+def remove_disjunctions_when_empty_conjunctions(model: DNFClassifier) -> int:
+    # If a conjunction has all 0 weights (no input atom is used), then this
+    # conjunction shouldn't be used in a rule.
+    conj_w = model.dnf.conjunctions.weights.data.clone()
+    unused_count = 0
+
+    for i, w in enumerate(conj_w):
+        if torch.all(w == 0):
+            # This conjunction should not be used
+            model.dnf.disjunctions.weights.data.T[i, :] = 0
+            unused_count += model.dnf.disjunctions.weights.shape[0]
+
+    return unused_count
+
+
 def apply_threshold(
     model: DNFClassifier,
     og_conj_weight: Tensor,
@@ -108,53 +123,66 @@ def apply_threshold(
 
 
 def extract_asp_rules(sd: dict, flatten: bool = False) -> List[str]:
-    disj_w = sd["dnf.disjunctions.weights"]
-    not_covered_labels = []
-    required_conj = []
-    # Create disjunction dictionary -- disjunct id: [(sign, conjunction id)]
-    disjunct_dict: Dict[int, List[Tuple[int, int]]] = dict()
-    for i, w in enumerate(disj_w):
-        if torch.all(w == 0):
-            # No DNF for label i
-            not_covered_labels.append(i)
-            continue
+    output_rules = []
 
-        disjunct_dict[i] = []
-        for j, v in enumerate(w):
-            if v != 0:
-                # Tuple: (sign, conj id)
-                disjunct_dict[i].append((int(torch.sign(v).item()), j))
-                required_conj.append(j)
-
+    # Get all conjunctions
     conj_w = sd["dnf.conjunctions.weights"]
-    # Create conjunction dictionary -- conjunct id: [atom]
-    conjunct_dict: Dict[int, List[str]] = dict()
+    conjunction_map = dict()
     for i, w in enumerate(conj_w):
-        if i not in required_conj:
-            # Unused conjunction
+        if torch.all(w == 0):
+            # No conjunction is applied here
             continue
 
-        conjunct_dict[i] = []
+        conjuncts = []
         for j, v in enumerate(w):
             if v < 0:
-                conjunct_dict[i].append(f"not a{j}")
+                # Negative weight, negate the atom
+                conjuncts.append(f"not has_attr_{j}")
             elif v > 0:
-                conjunct_dict[i].append(f"a{j}")
+                # Positive weight, normal atom
+                conjuncts.append(f"has_attr_{j}")
 
-    # Construct rules with the two dictionaries
-    output_rules = []
-    for disj_id, ts in disjunct_dict.items():
-        for (sign, conj_id) in ts:
-            conj_body = ", ".join(conjunct_dict[conj_id])
-            if sign == 1 and flatten:
-                output_rules.append(f"label({disj_id}) :- {conj_body}.")
-            else:
-                output_rules.append(f"conj_{conj_id} :- {conj_body}.")
-                output_rules.append(
-                    f"label({disj_id}) :- "  # head
-                    + ("" if sign == 1 else "not")  # negation if needed
-                    + f" conj_{conj_id}."  # body
-                )
+        conjunction_map[i] = conjuncts
+
+    if not flatten:
+        # Add conjunctions as auxilary predicates into final rules list
+        # if not flatten
+        for k, v in conjunction_map.items():
+            output_rules.append(f"conj_{k} :- {', '.join(v)}.")
+
+    # Get DNF
+    disj_w = sd["dnf.disjunctions.weights"]
+    not_covered_classes = []
+    for i, w in enumerate(disj_w):
+        if torch.all(w == 0):
+            # No DNF for class i
+            not_covered_classes.append(i)
+            continue
+
+        disjuncts = []
+        for j, v in enumerate(w):
+            if v < 0 and j in conjunction_map:
+                # Negative weight, negate the existing conjunction
+                if flatten:
+                    # Need to add auxilary predicate (conj_X) which is not yet
+                    # in the final rules list
+                    output_rules.append(
+                        f"conj_{j} :- {', '.join(conjunction_map[j])}."
+                    )
+                    output_rules.append(f"label({i}) :- not conj_{j}.")
+                else:
+                    disjuncts.append(f"not conj_{j}")
+            elif v > 0 and j in conjunction_map:
+                # Postivie weight, add normal conjunction
+                if flatten:
+                    body = ", ".join(conjunction_map[j])
+                    output_rules.append(f"label({i}) :- {body}.")
+                else:
+                    disjuncts.append(f"conj_{j}")
+
+        if not flatten:
+            for disjunct in disjuncts:
+                output_rules.append(f"label({i}) :- {disjunct}.")
 
     return output_rules
 
@@ -262,8 +290,18 @@ class DNFPostTrainingProcessor:
         self.result_dict["after_train_perf"] = round(perf, 3)
 
     def _pruning(self, model: DNFClassifier) -> None:
+        # Pruning proceduse:
+        # 1. Prune disjunction
+        # 2. Prune unused conjunctions
+        #   - If a conjunction is not used in any disjunctions, pruned the
+        #     entire disjunct body
+        # 3. Prune conjunctions
+        # 4. Prune disjunctions that uses empty conjunctions
+        #   - If a conjunction has no conjunct, no disjunctions should use it
+        # 5. Prune disjunction again
         log.info("Pruning on DNF starts")
 
+        # 1. Prune disjunction
         log.info("Prune disj layer")
         prune_count = prune_layer_weight(
             model,
@@ -276,12 +314,14 @@ class DNFPostTrainingProcessor:
         new_perf = dnf_eval(
             model, self.use_cuda, self.val_loader, self.macro_metric
         )
-        log.info(f"Pruned disj count:   {prune_count}")
-        log.info(f"New perf after disj: {new_perf:.3f}")
+        log.info(f"Pruned disj count (1st):   {prune_count}")
+        log.info(f"New perf after disj:       {new_perf:.3f}")
 
+        # 2. Prune unused conjunctions
         unused_conj = remove_unused_conjunctions(model)
-        log.info(f"Remove unused conjunctios: {unused_conj}")
+        log.info(f"Remove unused conjunctions: {unused_conj}")
 
+        # 3. Prune conjunctions
         log.info("Prune conj layer")
         prune_count = prune_layer_weight(
             model,
@@ -294,12 +334,34 @@ class DNFPostTrainingProcessor:
         new_perf = dnf_eval(
             model, self.use_cuda, self.val_loader, self.macro_metric
         )
+        log.info(f"Pruned conj count:           {prune_count}")
+        log.info(f"New perf after conj:         {new_perf:.3f}")
+
+        # 4. Prune disjunctions that uses empty conjunctions
+        removed_disj = remove_disjunctions_when_empty_conjunctions(model)
+        log.info(
+            f"Remove disjunction that uses empty conjunctions: {removed_disj}"
+        )
+
+        # 5. Prune disjunction again
+        log.info("Prune disj layer again")
+        prune_count = prune_layer_weight(
+            model,
+            SemiSymbolicLayerType.DISJUNCTION,
+            self.prune_epsilon,
+            self.val_loader,
+            self.use_cuda,
+            self.macro_metric,
+        )
+        new_perf = dnf_eval(
+            model, self.use_cuda, self.val_loader, self.macro_metric
+        )
         new_perf_test = dnf_eval(
             model, self.use_cuda, self.test_loader, self.macro_metric
         )
-        log.info(f"Pruned conj count:           {prune_count}")
-        log.info(f"New perf after conj:         {new_perf:.3f}\n")
-        log.info(f"New perf after prune (test): {new_perf_test:.3f}")
+        log.info(f"Pruned disj count (2nd):   {prune_count}")
+        log.info(f"New perf after disj (2nd): {new_perf:.3f}")
+        log.info(f"New perf after prune (test): {new_perf_test:.3f}\n")
 
         torch.save(model.state_dict(), self.pth_file_base_name + "_pruned.pth")
         self.result_dict["after_prune_val"] = round(new_perf, 3)

@@ -62,7 +62,7 @@ def asp_eval(
         asp_base = []
         for i, a in enumerate(d.attribute_encoding):
             if a == 1:
-                asp_base.append(f"a{i}.")
+                asp_base.append(f"has_attr_{i}.")
 
         asp_base += rules
         asp_base.append("#show label/1.")

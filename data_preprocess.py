@@ -1,7 +1,6 @@
 import argparse
-from itertools import chain, combinations
 import pickle
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import numpy as np
 import torch
@@ -62,7 +61,6 @@ def attribute_reduction_mask_count_based(
 def attribute_reduction_mask_mi_based(
     dataset: List[MultiLabelRawSample],
     total_number_attr: int,
-    total_number_labels: int,
     mi_threshold: float,
 ) -> np.ndarray:
     # $I(X_i;Y) = H(X_i) - H(X_i|Y)$
@@ -71,15 +69,19 @@ def attribute_reduction_mask_mi_based(
     # $H(X_i)$: this needs to know $p(x_i)$
     # $H(X_i|Y)$: this needs to know $p(y)$, $p(x_i|y)$
 
-    # Get all combinations
-    labels = list(range(total_number_labels))
-    comb_keys_chain = chain.from_iterable(
-        combinations(labels, r) for r in range(1, total_number_labels + 1)
-    )
-    comb_keys_str_list = [",".join(str(s) for s in k) for k in comb_keys_chain]
+    # Get all combinations present in dataset
+    combination_dict = dict()
+    comb_keys_str_list = []
+
+    for d in dataset:
+        comb_key = ",".join([str(l) for l in d.labels])
+        if comb_key in combination_dict:
+            combination_dict[comb_key] += 1
+        else:
+            combination_dict[comb_key] = 1
+            comb_keys_str_list.append(comb_key)
 
     # Counting
-    combination_dict = {k: 0 for k in comb_keys_str_list}
     comb_attr_true_matrix = np.zeros(
         (len(comb_keys_str_list), total_number_attr)
     )
@@ -97,7 +99,6 @@ def attribute_reduction_mask_mi_based(
                 attr_false_matrix[a] += 1
 
         comb_key = ",".join([str(l) for l in d.labels])
-        combination_dict[comb_key] += 1
         i = comb_keys_str_list.index(comb_key)
 
         for j in range(total_number_attr):
@@ -315,7 +316,6 @@ if __name__ == "__main__":
         attribute_mask = attribute_reduction_mask_mi_based(
             dataset=sub_train,
             total_number_attr=args.rna,
-            total_number_labels=args.nl,
             mi_threshold=args.mit,
         )
 
