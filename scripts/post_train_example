@@ -1,0 +1,2 @@
+cd ..
+python run_post_train.py +pt.pth_path=??? # Trained model path
