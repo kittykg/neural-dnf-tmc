@@ -10,10 +10,10 @@ import hydra
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
 import torch
-from analysis import ClassificationMetric
 
-from rule_learner import DNFClassifier
+from analysis import ClassificationMetric
 from dnf_post_train import DNFPostTrainingProcessor
+from rule_learner import DNFClassifier
 
 
 WANDB_DISABLED = True
@@ -87,7 +87,7 @@ def run_post_training_process(cfg: DictConfig) -> None:
         assert macro_metric_str_val in [e.value for e in ClassificationMetric]
         metric_choice = ClassificationMetric(macro_metric_str_val)
     else:
-        metric_choice = ClassificationMetric.PRECISION
+        metric_choice = ClassificationMetric.F1_SCORE
 
     def post_to_discord_webhook(webhook_url: str, message: str) -> None:
         requests.post(webhook_url, json={"content": message})

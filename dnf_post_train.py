@@ -29,7 +29,7 @@ def prune_layer_weight(
     epsilon: float,
     data_loader: DataLoader,
     use_cuda: bool,
-    metric_choice: ClassificationMetric = ClassificationMetric.PRECISION,
+    metric_choice: ClassificationMetric = ClassificationMetric.F1_SCORE,
     show_tqdm: bool = False,
 ) -> int:
     if layer_type == SemiSymbolicLayerType.CONJUNCTION:
@@ -145,7 +145,7 @@ def extract_asp_rules(sd: dict, flatten: bool = False) -> List[str]:
         conjunction_map[i] = conjuncts
 
     if not flatten:
-        # Add conjunctions as auxilary predicates into final rules list
+        # Add conjunctions as auxiliary predicates into final rules list
         # if not flatten
         for k, v in conjunction_map.items():
             output_rules.append(f"conj_{k} :- {', '.join(v)}.")
@@ -164,7 +164,7 @@ def extract_asp_rules(sd: dict, flatten: bool = False) -> List[str]:
             if v < 0 and j in conjunction_map:
                 # Negative weight, negate the existing conjunction
                 if flatten:
-                    # Need to add auxilary predicate (conj_X) which is not yet
+                    # Need to add auxiliary predicate (conj_X) which is not yet
                     # in the final rules list
                     output_rules.append(
                         f"conj_{j} :- {', '.join(conjunction_map[j])}."
@@ -173,7 +173,7 @@ def extract_asp_rules(sd: dict, flatten: bool = False) -> List[str]:
                 else:
                     disjuncts.append(f"not conj_{j}")
             elif v > 0 and j in conjunction_map:
-                # Postivie weight, add normal conjunction
+                # Positive weight, add normal conjunction
                 if flatten:
                     body = ", ".join(conjunction_map[j])
                     output_rules.append(f"label({i}) :- {body}.")
@@ -203,7 +203,7 @@ class DNFPostTrainingProcessor:
     criterion: Callable[[Tensor, Tensor], Tensor]
     reg_fn: str
     reg_lambda: float
-    macro_metric: ClassificationMetric = ClassificationMetric.PRECISION
+    macro_metric: ClassificationMetric = ClassificationMetric.F1_SCORE
     pth_file_base_name: str
 
     # Configs
@@ -290,7 +290,7 @@ class DNFPostTrainingProcessor:
         self.result_dict["after_train_perf"] = round(perf, 3)
 
     def _pruning(self, model: DNFClassifier) -> None:
-        # Pruning proceduse:
+        # Pruning procedure:
         # 1. Prune disjunction
         # 2. Prune unused conjunctions
         #   - If a conjunction is not used in any disjunctions, pruned the
@@ -537,6 +537,9 @@ class DNFPostTrainingProcessor:
         with open(self.test_pkl_path, "rb") as f:
             test_data = pickle.load(f)
         eval_dict = asp_eval(test_data, rules)
+
+        with open(self.pth_file_base_name + "_rules.txt", "w") as f:
+            f.write("\n".join(rules))
 
         fc_count = eval_dict["total_fully_correct_count"]
         total_count = eval_dict["total_count"]

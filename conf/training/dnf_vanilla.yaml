@@ -2,7 +2,7 @@ defaults:
   - base_parameter
 
 use_cuda: true
-experiment_name: dnf_vanilla_t3_bce
+experiment_name: dnf_vanilla_t22_mi_bce
 model_name: dnf_vanilla
 
 dnf_vanilla:
@@ -19,4 +19,4 @@ dnf_vanilla:
   delta_decay_rate: 1.1
   reg_fn: l1_mod
   reg_lambda: 0.05
-  macro_metric: precision # choices: precision, recall, f1-score
+  macro_metric: f1-score # choices: precision, recall, f1-score

@@ -26,7 +26,7 @@ def _run_experiment_helper(cfg: DictConfig):
     run = wandb.init(
         project="tmc-dnf",
         entity="kittykg",
-        config=OmegaConf.to_container(cfg["training"][model_name]),
+        config=OmegaConf.to_container(cfg["training"][model_name]),  # type: ignore
         dir=HydraConfig.get().run.dir,
     )
 
@@ -37,15 +37,11 @@ def _run_experiment_helper(cfg: DictConfig):
     np.random.seed(random_seed)
 
     # Set up model
-    if model_name == "dnf_vanilla":
-        base_cfg = OmegaConf.to_container(cfg["model"]["base_dnf"])
-        model = DNFClassifier(**base_cfg)
-    else:
-        base_cfg = OmegaConf.to_container(cfg["model"]["double_dnf"])
-        model = DoubleDNFClassifier(**base_cfg)
+    base_cfg = OmegaConf.to_container(cfg["model"]["base_dnf"])
+    model = DNFClassifier(**base_cfg)  # type: ignore
     model.set_delta_val(cfg["training"][model_name]["initial_delta"])
 
-    torch.autograd.set_detect_anomaly(True)
+    torch.autograd.set_detect_anomaly(True)  # type: ignore
 
     trainer = DnfClassifierTrainer(model_name, cfg)
     state_dict = trainer.train(model)
@@ -60,7 +56,7 @@ def _run_experiment_helper(cfg: DictConfig):
     )
     model_artifact.add_file(f"{experiment_name}_{random_seed}.pth")
     wandb.save(f"{experiment_name}_{random_seed}.pth")
-    run.log_artifact(model_artifact)
+    run.log_artifact(model_artifact)  # type: ignore
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
@@ -88,7 +84,7 @@ def run_experiment(cfg: DictConfig) -> None:
         )
         print(traceback.format_exc())
     finally:
-        post_to_discord_webhook(webhook_url, webhook_msg)
+        post_to_discord_webhook(webhook_url, webhook_msg)  # type: ignore
 
 
 if __name__ == "__main__":

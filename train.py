@@ -40,7 +40,7 @@ class DnfClassifierTrainer:
     epochs: int
     reg_fn: str
     reg_lambda: float
-    macro_metric: ClassificationMetric = ClassificationMetric.PRECISION
+    macro_metric: ClassificationMetric = ClassificationMetric.F1_SCORE
 
     # Delta decay scheduler
     delta_decay_scheduler: DeltaDelayedDecayScheduler
@@ -209,6 +209,9 @@ class DnfClassifierTrainer:
                 # "disj_w_hist": f2,
             }
         )
+
+        # with open("train_macro", "a") as f:
+        #     f.write(f"{avg_perf:.3f}, {new_delta_val:.3f}\n")
 
         # plt.close(f1)
         # plt.close(f2)

@@ -39,7 +39,7 @@ class MacroMetricMeter(Meter):
 
     def __init__(
         self,
-        metric_choice: ClassificationMetric = ClassificationMetric.PRECISION,
+        metric_choice: ClassificationMetric = ClassificationMetric.F1_SCORE,
     ) -> None:
         super(MacroMetricMeter, self).__init__()
         self.metric_choice = metric_choice

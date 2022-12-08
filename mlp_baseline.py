@@ -16,7 +16,7 @@ from analysis import ClassificationMetric, MetricValueMeter, MacroMetricMeter
 from utils import load_multi_label_data, get_dnf_classifier_x_and_y
 
 # MLP baseline experiment hyperparameter
-EXPERIMENT_NAME = "mlp_t15"
+EXPERIMENT_NAME = "mlp_t22"
 ATTR_IN = 103
 LABEL_OUT = 22
 INTERMEDIATE_LAYER = LABEL_OUT * 3

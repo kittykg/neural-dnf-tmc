@@ -11,7 +11,7 @@ FILE_PATH = f"synth_multi_label_data_in{NUM_NULLARY}_conj{NUM_CONJUNCTS}.npz"
 GEN_SIZE = 10000
 
 
-def get_rule_asp(and_kernel: np.ndarray, or_kernel=np.ndarray) -> List[str]:
+def get_rule_asp(and_kernel: np.ndarray, or_kernel: np.ndarray) -> List[str]:
     rule_asp = []
 
     for i, k in enumerate(and_kernel):
@@ -48,23 +48,36 @@ def clingo_solve(
     ctl = clingo.Control(["--warn=none"])
     ctl.add("base", [], " ".join(rule_asp + example_asp + show_statements))
     ctl.ground([("base", [])])
-    sh = ctl.solve(yield_=True)
-    return str(sh.model())
+    with ctl.solve(yield_=True) as handle:  # type: ignore
+        model = handle.model()
+    return str(model)
 
 
 def generate_data() -> str:
-    rng = np.random.default_rng(seed=73)
+    rng = np.random.default_rng(seed=RNG_SEED)
 
     in_size = NUM_NULLARY
     num_conjuncts = NUM_CONJUNCTS
     num_labels = NUM_LABELS
     gen_size = GEN_SIZE
 
+    # For multi-label classification, multiple rules can fire at the same time.
+    # So we want the data can trigger multiple conjunctions (used by different
+    # rules) at the same time. A naive way to do it is to let each conjunction
+    # only use a small subset of atoms.
+    # Say we have 15 attributes and we have 5 conjunctions. If conjunction 1
+    # used by label 1 is attribute 1 ^ 2 ^ 3, and conjunction 2 used by label 2
+    # is attribute 4 ^ 5 ^ 6. Both conjunction 1 and 2 can fire at the same time
+    # if a data point have all attribute 1-6. If both conjunction 1 and 2 are
+    # fired, then label 1 and label 2 are both true, achieving multi-label.
     assert (
         in_size % num_conjuncts == 0
-    ), "Expected full divison of NUM_NULLARY / NUM_CONJUNCTS"
+    ), "Expected full division of NUM_NULLARY / NUM_CONJUNCTS"
     atoms_to_use = int(in_size / num_conjuncts)
 
+    # Create and_kernel such that each conjunction uses a subset of input.
+    # We also make each sub-kernel different. This is not necessary, but make
+    # the rules different and has variety.
     and_kernel = np.zeros((num_conjuncts, in_size)).astype(int)
     seen_sub_kernel = []
     for i in range(num_conjuncts):
@@ -124,6 +137,11 @@ def generate_data() -> str:
     # Save the file
     print(f"Creating {str(FILE_PATH)} with keys: {str(data.keys())}")
     np.savez_compressed(FILE_PATH, **data)
+
+    # Output rules to STDOUT
+    for r in rule_asp:
+        print(r)
+
     return str(FILE_PATH)
 
 

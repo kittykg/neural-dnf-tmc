@@ -71,9 +71,8 @@ def asp_eval(
         ctl.add("base", [], " ".join(asp_base))
         ctl.ground([("base", [])])
 
-        sh = ctl.solve(yield_=True)
-        assert isinstance(sh, SolveHandle)
-        asp_model: Optional[Model] = sh.model()
+        with ctl.solve(yield_=True) as handle:  # type: ignore
+            asp_model = handle.model()
 
         if not asp_model or str(asp_model) == "":
             prediction_one_hot = torch.zeros(d.label_encoding.shape)
