@@ -1,7 +1,7 @@
 # Example of data preprocessing script, see data_preprocess.py for detailed args
 cd ..
 
-# Count-based data preprocessing
+# Count-based data preprocessing, not used in the paper
 python data_preprocess.py \
     -rtrain ??? \ # Raw train path
     -rval ??? \ # Raw val path
@@ -14,7 +14,8 @@ python data_preprocess.py \
     -lft 0 \
     -od ??? # Output dir
 
-# Mutual-information-based data preprocessing
+# Mutual-information-based data preprocessing, please use this to reproduce any
+# TMC subsets
 python data_preprocess.py \
     -rtrain ??? \ # Raw train path
     -rval ??? \ # Raw val path

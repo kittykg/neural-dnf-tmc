@@ -73,7 +73,7 @@ if __name__ == "__main__":
     parser.add_argument("-test", type=str, help="Test arff path")
     parser.add_argument("-od", type=str, help="Output directory")
     parser.add_argument(
-        "-rs", type=int, default="73", help="Random seed, deafult"
+        "-rs", type=int, default="73", help="Random seed, default 73"
     )
 
     args = parser.parse_args()
